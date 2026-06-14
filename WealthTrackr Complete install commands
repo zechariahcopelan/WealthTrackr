@@ -1,0 +1,880 @@
+# WealthTrackr Complete System Setup Guide
+# Run these commands on a fresh Ubuntu system
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 1: SYSTEM UPDATE AND BASIC TOOLS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl wget git vim nano tree htop
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 2: PYTHON SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Install Python 3.12 and pip
+sudo apt install -y python3.12 python3.12-venv python3.12-dev python3-pip
+
+# Create symbolic links (if needed)
+sudo ln -sf /usr/bin/python3.12 /usr/bin/python3
+sudo ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# Verify Python installation
+python3 --version
+pip3 --version
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 3: POSTGRESQL DATABASE SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Install PostgreSQL
+sudo apt install -y postgresql postgresql-contrib
+
+# Start PostgreSQL service
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Create database and user
+sudo -u postgres psql << EOF
+CREATE DATABASE wealthtrackr;
+CREATE USER zack WITH PASSWORD 'newsecurepassword';
+GRANT ALL PRIVILEGES ON DATABASE wealthtrackr TO zack;
+ALTER USER zack CREATEDB;
+\q
+EOF
+
+# Test database connection
+psql -d wealthtrackr -U zack -h localhost -c "SELECT version();"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 4: SYSTEM DEPENDENCIES FOR PYTHON PACKAGES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# For python-magic (file type detection)
+sudo apt install -y libmagic1
+
+# For Pillow (image processing)
+sudo apt install -y libjpeg-dev zlib1g-dev libpng-dev
+
+# For psycopg2 (PostgreSQL adapter)
+sudo apt install -y libpq-dev
+
+# For general development
+sudo apt install -y build-essential
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 5: PROJECT DIRECTORY AND VIRTUAL ENVIRONMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Create project directory
+mkdir -p ~/Documents/WealthTrackr
+cd ~/Documents/WealthTrackr
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Upgrade pip in virtual environment
+pip install --upgrade pip
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 6: CLONE YOUR PROJECT (if using Git)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# If you have a Git repository:
+# git clone <your-repo-url> .
+# Or restore from backup/cloud storage
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 7: PYTHON PACKAGE INSTALLATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Install from requirements.txt (preferred method)
+pip install -r requirements.txt
+
+# OR install packages individually if requirements.txt is not available:
+
+# Core FastAPI and Database
+pip install fastapi==0.104.1
+pip install uvicorn[standard]==0.24.0
+pip install sqlalchemy==2.0.23
+pip install alembic==1.12.1
+pip install psycopg2-binary==2.9.9
+
+# Authentication & Security
+pip install python-jose[cryptography]==3.3.0
+pip install passlib[bcrypt]==1.7.4
+pip install python-multipart==0.0.6
+
+# Security & File Utilities
+pip install python-magic==0.4.27
+pip install pillow==10.0.0
+pip install pyotp==2.8.0
+pip install qrcode==7.4.2
+
+# Environment & Configuration
+pip install python-dotenv==1.0.0
+pip install pydantic[email]==2.4.2
+pip install pydantic-settings==2.0.3
+
+# AI & Data Analysis
+pip install openai==1.3.5
+pip install numpy==1.26.2
+pip install pandas==2.1.4
+pip install scikit-learn==1.3.2
+
+# Email & Communications
+pip install emails==0.6.0
+pip install jinja2==3.1.2
+
+# Utilities
+pip install requests==2.31.0
+pip install httpx==0.25.1
+pip install python-dateutil==2.8.2
+pip install pytz==2023.3
+pip install aiofiles==23.2.0
+
+# Development & Testing
+pip install pytest==7.4.3
+pip install pytest-asyncio==0.21.1
+pip install black==23.12.1
+pip install flake8==6.1.0
+
+# Enhanced logging
+pip install structlog==23.2.0
+pip install rich==13.7.0
+
+# Background tasks (optional)
+pip install celery==5.3.4
+pip install redis==5.0.1
+
+# Python 3.12 compatibility
+pip install setuptools==69.0.3
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 8: VERIFY INSTALLATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test Python packages
+python -c "import fastapi; print('FastAPI:', fastapi.__version__)"
+python -c "import sqlalchemy; print('SQLAlchemy:', sqlalchemy.__version__)"
+python -c "import magic, PIL, pyotp, qrcode; print('Security packages: OK')"
+
+# Test database connection
+python -c "
+import psycopg2
+try:
+    conn = psycopg2.connect(host='localhost', database='wealthtrackr', user='zack', password='newsecurepassword')
+    print('Database connection: OK')
+    conn.close()
+except Exception as e:
+    print('Database connection failed:', e)
+"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 9: ENVIRONMENT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Create .env file (update with your actual values)
+cat > .env << EOF
+# Database
+DATABASE_URL=postgresql://zack:newsecurepassword@localhost:5432/wealthtrackr
+
+# JWT Configuration
+JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=14
+
+# Email Configuration
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+
+# AI Configuration (if using)
+OPENAI_API_KEY=your-openai-api-key
+
+# App Configuration
+DEBUG=True
+APP_NAME=WealthTrackr
+APP_VERSION=2.0.0
+ENVIRONMENT=development
+
+# Security
+ENCRYPTION_KEY=your-encryption-key-32-chars-long
+CORS_ORIGINS=["http://localhost:3000","http://localhost:8080"]
+EOF
+
+# Make .env file readable only by owner
+chmod 600 .env
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 10: DATABASE INITIALIZATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Create wealthtrackr schema in PostgreSQL
+psql -d wealthtrackr -U zack -h localhost << EOF
+CREATE SCHEMA IF NOT EXISTS wealthtrackr;
+\q
+EOF
+
+# Initialize Alembic (if not already done)
+# alembic init alembic
+
+# Run migrations
+alembic upgrade head
+
+# If you get duplicate table errors, stamp the current migration:
+# alembic stamp head
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 11: CREATE REQUIRED DIRECTORIES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Create upload directories for file handling
+mkdir -p static/uploads/profile_pictures
+mkdir -p static/uploads/receipts
+mkdir -p static/uploads/documents
+
+# Create logs directory
+mkdir -p logs
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 12: OPTIONAL - REDIS SETUP (for background tasks)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Install Redis (optional, for Celery background tasks)
+sudo apt install -y redis-server
+
+# Start Redis
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
+
+# Test Redis
+redis-cli ping
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 13: TEST APPLICATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test FastAPI application
+cd ~/Documents/WealthTrackr
+source venv/bin/activate
+
+# Run the application
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# In another terminal, test the API:
+# curl http://localhost:8000/
+# curl http://localhost:8000/health
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 14: ANDROID DEVELOPMENT SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Install Java Development Kit (OpenJDK 17 for compatibility with your Kotlin/Compose setup)
+sudo apt install -y openjdk-17-jdk
+
+# Set JAVA_HOME environment variables
+echo 'export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64' >> ~/.bashrc
+echo 'export PATH=$PATH:$JAVA_HOME/bin' >> ~/.bashrc
+
+# Install Android SDK dependencies
+sudo apt install -y libc6:i386 libncurses5:i386 libstdc++6:i386 lib32z1 libbz2-1.0:i386
+
+# Download and install Android Studio (latest version)
+cd ~/Downloads
+wget https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2024.1.1.12/android-studio-2024.1.1.12-linux.tar.gz
+tar -xzf android-studio-*.tar.gz
+sudo mv android-studio /opt/
+sudo chown -R $USER:$USER /opt/android-studio
+
+# Create Android Studio desktop entry and command line link
+sudo ln -sf /opt/android-studio/bin/studio.sh /usr/local/bin/android-studio
+
+# Set up Android SDK environment variables
+echo 'export ANDROID_HOME=$HOME/Android/Sdk' >> ~/.bashrc
+echo 'export PATH=$PATH:$ANDROID_HOME/emulator' >> ~/.bashrc
+echo 'export PATH=$PATH:$ANDROID_HOME/platform-tools' >> ~/.bashrc
+echo 'export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin' >> ~/.bashrc
+
+# Reload bash profile
+source ~/.bashrc
+
+# Create Android project directory structure
+mkdir -p ~/Documents/WealthTrackr/android
+
+# Install KVM for Android Emulator (hardware acceleration)
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils
+sudo adduser $USER kvm
+sudo adduser $USER libvirt
+
+# Android Studio SDK packages (run after Android Studio installation)
+echo "After installing Android Studio, install these SDK packages:"
+echo "- Android SDK Platform 34 (API 34)"
+echo "- Android SDK Build-Tools 34.0.0"
+echo "- Android Emulator"
+echo "- Android SDK Platform-Tools"
+echo "- Intel x86 Atom_64 System Images (for emulator)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 15: ANDROID PROJECT DEPENDENCIES SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Your Android app uses these key technologies (based on your files):
+# - Kotlin with Compose
+# - Hilt for Dependency Injection
+# - Retrofit for API calls
+# - Biometric Authentication
+# - Coroutines & Flow
+# - Navigation Compose
+
+# Create gradle.properties for your Android project
+cat > ~/Documents/WealthTrackr/android/gradle.properties << EOF
+# Kotlin configuration
+kotlin.code.style=official
+kotlin.jvm.target.validation.mode=warning
+
+# Android configuration
+android.useAndroidX=true
+android.enableJetifier=true
+android.defaults.buildfeatures.buildconfig=true
+android.nonTransitiveRClass=false
+android.nonFinalResIds=false
+
+# Build optimizations
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+org.gradle.parallel=true
+org.gradle.caching=true
+org.gradle.configureondemand=true
+
+# Compose optimizations
+android.enableResourceOptimizations=true
+android.experimental.enableArtProfiles=true
+
+# Your API configuration
+API_BASE_URL=http://localhost:8000/api
+API_DEBUG_MODE=true
+EOF
+
+# Android specific environment variables
+echo 'export API_BASE_URL=http://localhost:8000/api' >> ~/.bashrc
+echo 'export WEALTHTRACKR_DEBUG=true' >> ~/.bashrc
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 16: ANDROID GRADLE DEPENDENCIES VERSIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Your libs.versions.toml should include (create this file):
+cat > ~/Documents/WealthTrackr/android/gradle/libs.versions.toml << EOF
+[versions]
+# Kotlin & Gradle
+kotlin = "1.9.20"
+compose-compiler = "1.5.5"
+android-gradle-plugin = "8.2.0"
+
+# AndroidX & Compose
+androidx-core = "1.12.0"
+androidx-lifecycle = "2.7.0"
+androidx-activity-compose = "1.8.2"
+androidx-navigation-compose = "2.7.5"
+androidx-compose-bom = "2023.12.00"
+androidx-hilt = "1.1.0"
+androidx-biometric = "1.1.0"
+androidx-splash-screen = "1.0.1"
+
+# Networking & Serialization
+retrofit = "2.9.0"
+okhttp = "4.12.0"
+kotlinx-serialization = "1.6.2"
+
+# Dependency Injection
+dagger-hilt = "2.48.1"
+
+# Image Loading
+coil = "2.5.0"
+
+# Testing
+junit = "4.13.2"
+androidx-test-ext-junit = "1.1.5"
+espresso-core = "3.5.1"
+
+[libraries]
+# Kotlin
+kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
+
+# AndroidX Core
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidx-core" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
+
+# Compose
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidx-activity-compose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "androidx-compose-bom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+# Navigation
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "androidx-navigation-compose" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "androidx-hilt" }
+
+# Hilt
+dagger-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "dagger-hilt" }
+dagger-hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "dagger-hilt" }
+
+# Networking
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+
+# Serialization
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+# Security & Biometrics
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "androidx-biometric" }
+
+# Splash Screen
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-splash-screen" }
+
+# Image Loading
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Testing
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-test-ext-junit" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso-core" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+dagger-hilt = { id = "com.google.dagger.hilt.android", version.ref = "dagger-hilt" }
+EOF
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 17: ANDROID-BACKEND INTEGRATION SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Your Android app expects these API endpoints based on your AuthService.kt:
+echo "Verifying backend API endpoints match Android app expectations..."
+
+# Test critical auth endpoints
+curl -X GET http://localhost:8000/health
+curl -X GET http://localhost:8000/auth/check-username?username=testuser
+curl -X GET http://localhost:8000/docs  # If debug mode is enabled
+
+# Create Android network security config (for development)
+mkdir -p ~/Documents/WealthTrackr/android/app/src/main/res/xml
+cat > ~/Documents/WealthTrackr/android/app/src/main/res/xml/network_security_config.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain> <!-- Android emulator -->
+    </domain-config>
+</network-security-config>
+EOF
+
+# Create API configuration file for Android
+cat > ~/Documents/WealthTrackr/android/app/src/main/java/com/example/wealthtrackr/data/remote/ApiConstants.kt << EOF
+package com.example.wealthtrackr.data.remote
+
+object ApiConstants {
+    // Base URLs for different environments
+    const val BASE_URL_DEVELOPMENT = "http://10.0.2.2:8000/api/"  // For Android emulator
+    const val BASE_URL_LOCAL = "http://localhost:8000/api/"       // For physical device on same network
+    const val BASE_URL_PRODUCTION = "https://your-domain.com/api/" // Your production URL
+    
+    // Current environment
+    const val BASE_URL = BASE_URL_DEVELOPMENT // Change based on environment
+    
+    // API Endpoints (matching your FastAPI routes)
+    object Auth {
+        const val REGISTER = "auth/register"
+        const val LOGIN = "auth/token"  // OAuth2 endpoint
+        const val REFRESH = "auth/refresh"
+        const val LOGOUT = "auth/logout"
+        const val VERIFY_EMAIL = "auth/verify-email"
+        const val RESEND_VERIFICATION = "auth/resend-verification"
+        const val FORGOT_PASSWORD = "auth/forgot-password"
+        const val RESET_PASSWORD = "auth/reset-password"
+        const val CHANGE_PASSWORD = "auth/change-password"
+        const val PROFILE = "auth/profile"
+        const val CHECK_USERNAME = "auth/check-username"
+        const val CHECK_EMAIL = "auth/check-email"
+    }
+    
+    object Users {
+        const val USERS = "users"
+        const val USER_BY_ID = "users/{user_id}"
+        const val UPDATE_BIO = "users/{user_id}/bio"
+        const val UPDATE_PROFILE_PICTURE = "users/{user_id}/profile-picture"
+        const val PROFILE_COMPLETION = "users/{user_id}/completion"
+        const val SECURITY_SETTINGS = "users/{user_id}/security"
+        const val PREFERENCES = "users/{user_id}/preferences"
+    }
+    
+    // Request/Response content types
+    const val CONTENT_TYPE_JSON = "application/json"
+    const val CONTENT_TYPE_FORM = "application/x-www-form-urlencoded"
+    
+    // Headers
+    const val AUTHORIZATION = "Authorization"
+    const val BEARER_PREFIX = "Bearer "
+    
+    // Timeouts (in seconds)
+    const val CONNECT_TIMEOUT = 30L
+    const val READ_TIMEOUT = 30L
+    const val WRITE_TIMEOUT = 30L
+}
+EOF
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 18: BACKEND API COMPATIBILITY UPDATES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Update your FastAPI backend to handle Android app requirements
+echo "Backend updates needed for Android compatibility:"
+
+# 1. Update CORS settings in main.py
+cat >> ~/Documents/WealthTrackr/.env << EOF
+
+# CORS settings for Android development
+CORS_ORIGINS=["http://localhost:3000","http://localhost:8080","http://10.0.2.2:8000","http://127.0.0.1:8000"]
+CORS_ALLOW_CREDENTIALS=true
+CORS_ALLOW_METHODS=["GET","POST","PUT","DELETE","PATCH","OPTIONS"]
+CORS_ALLOW_HEADERS=["*"]
+EOF
+
+# 2. Create Android-compatible response models
+cat > ~/Documents/WealthTrackr/backend/schemas/android_responses.py << EOF
+# Android-compatible response schemas
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+class AndroidUserResponse(BaseModel):
+    """User response format matching Android UserDto"""
+    id: str
+    username: str
+    name: str
+    email: str
+    is_verified: bool = False
+    bio: Optional[str] = None
+    profile_pic_url: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    display_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    date_of_birth: Optional[str] = None  # ISO format
+    account_status: str = "active"
+    user_role: str = "user"
+    created_at: str
+    updated_at: str
+    
+    class Config:
+        from_attributes = True
+
+class AndroidLoginResponse(BaseModel):
+    """Login response matching Android expectations"""
+    success: bool
+    message: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: str = "Bearer"
+    expires_in: Optional[int] = None
+    user: Optional[AndroidUserResponse] = None
+
+class AndroidApiResponse(BaseModel):
+    """Generic API response wrapper for Android"""
+    success: bool
+    message: Optional[str] = None
+    data: Optional[Any] = None
+    errors: Optional[List[str]] = None
+    timestamp: str = datetime.now().isoformat()
+EOF
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 19: DEVELOPMENT WORKFLOW SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Create start scripts for development
+cat > ~/Documents/WealthTrackr/start_backend.sh << EOF
+#!/bin/bash
+cd ~/Documents/WealthTrackr
+source venv/bin/activate
+export PYTHONPATH=\${PYTHONPATH}:\$(pwd)
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+EOF
+
+cat > ~/Documents/WealthTrackr/start_android.sh << EOF
+#!/bin/bash
+cd ~/Documents/WealthTrackr/android
+# Start Android emulator (adjust AVD name as needed)
+\$ANDROID_HOME/emulator/emulator -avd WealthTrackr_AVD -netdelay none -netspeed full &
+
+# Wait for emulator to start
+sleep 10
+
+# Install and run the app
+./gradlew installDebug
+adb shell am start -n com.example.wealthtrackr/.MainActivity
+EOF
+
+# Make scripts executable
+chmod +x ~/Documents/WealthTrackr/start_backend.sh
+chmod +x ~/Documents/WealthTrackr/start_android.sh
+
+# Create development environment checker
+cat > ~/Documents/WealthTrackr/check_environment.sh << EOF
+#!/bin/bash
+echo "WealthTrackr Environment Check"
+echo "=============================="
+
+# Check Python environment
+echo "Python Environment:"
+python3 --version
+pip --version
+
+# Check virtual environment
+if [ -d "venv" ]; then
+    echo "✓ Virtual environment exists"
+else
+    echo "✗ Virtual environment missing"
+fi
+
+# Check database connection
+echo -e "\nDatabase Check:"
+python3 -c "
+import psycopg2
+try:
+    conn = psycopg2.connect(host='localhost', database='wealthtrackr', user='zack', password='newsecurepassword')
+    print('✓ Database connection successful')
+    conn.close()
+except Exception as e:
+    print(f'✗ Database connection failed: {e}')
+"
+
+# Check Android environment
+echo -e "\nAndroid Environment:"
+if [ -n "\$JAVA_HOME" ]; then
+    echo "✓ JAVA_HOME set: \$JAVA_HOME"
+else
+    echo "✗ JAVA_HOME not set"
+fi
+
+if [ -n "\$ANDROID_HOME" ]; then
+    echo "✓ ANDROID_HOME set: \$ANDROID_HOME"
+else
+    echo "✗ ANDROID_HOME not set"
+fi
+
+# Check if Android Studio is available
+if command -v android-studio &> /dev/null; then
+    echo "✓ Android Studio command available"
+else
+    echo "✗ Android Studio command not available"
+fi
+
+# Check API connectivity
+echo -e "\nAPI Check:"
+if curl -s http://localhost:8000/health > /dev/null; then
+    echo "✓ Backend API is responding"
+else
+    echo "✗ Backend API not responding (make sure server is running)"
+fi
+EOF
+
+chmod +x ~/Documents/WealthTrackr/check_environment.sh
+
+# Create a verification script
+cat > verify_setup.py << 'EOF'
+#!/usr/bin/env python3
+
+import sys
+import subprocess
+import importlib
+
+def check_package(package_name, import_name=None):
+    if import_name is None:
+        import_name = package_name
+    
+    try:
+        module = importlib.import_module(import_name)
+        version = getattr(module, '__version__', 'Unknown version')
+        print(f"✓ {package_name}: {version}")
+        return True
+    except ImportError:
+        print(f"✗ {package_name}: Not installed")
+        return False
+
+def check_system_command(command, name):
+    try:
+        result = subprocess.run([command, '--version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            version = result.stdout.split('\n')[0]
+            print(f"✓ {name}: {version}")
+            return True
+        else:
+            print(f"✗ {name}: Not available")
+            return False
+    except FileNotFoundError:
+        print(f"✗ {name}: Not installed")
+        return False
+
+def main():
+    print("WealthTrackr System Verification")
+    print("=" * 50)
+    
+    # Check Python packages
+    print("\nPython Packages:")
+    packages = [
+        ('fastapi', 'fastapi'),
+        ('uvicorn', 'uvicorn'),
+        ('sqlalchemy', 'sqlalchemy'),
+        ('alembic', 'alembic'),
+        ('psycopg2', 'psycopg2'),
+        ('python-jose', 'jose'),
+        ('passlib', 'passlib'),
+        ('python-magic', 'magic'),
+        ('pillow', 'PIL'),
+        ('pyotp', 'pyotp'),
+        ('qrcode', 'qrcode'),
+        ('pydantic', 'pydantic'),
+        ('openai', 'openai'),
+        ('numpy', 'numpy'),
+        ('pandas', 'pandas'),
+        ('requests', 'requests'),
+    ]
+    
+    failed_packages = []
+    for package_name, import_name in packages:
+        if not check_package(package_name, import_name):
+            failed_packages.append(package_name)
+    
+    # Check system commands
+    print("\nSystem Commands:")
+    commands = [
+        ('python3', 'Python'),
+        ('psql', 'PostgreSQL Client'),
+        ('redis-cli', 'Redis Client'),
+    ]
+    
+    failed_commands = []
+    for command, name in commands:
+        if not check_system_command(command, name):
+            failed_commands.append(name)
+    
+    # Summary
+    print("\n" + "=" * 50)
+    if failed_packages or failed_commands:
+        print("❌ Setup incomplete!")
+        if failed_packages:
+            print(f"Missing packages: {', '.join(failed_packages)}")
+        if failed_commands:
+            print(f"Missing commands: {', '.join(failed_commands)}")
+        sys.exit(1)
+    else:
+        print("✅ All systems ready! WealthTrackr setup complete.")
+
+if __name__ == "__main__":
+    main()
+EOF
+
+# Make the verification script executable
+chmod +x verify_setup.py
+
+# Run verification
+python verify_setup.py
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ADDITIONAL ANDROID SETUP NOTES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "🤖 ANDROID DEVELOPMENT NOTES:"
+echo ""
+echo "1. Your Android app uses these key dependencies (add to build.gradle):"
+echo "   - Hilt for dependency injection"
+echo "   - Retrofit for API communication"
+echo "   - Compose for UI"
+echo "   - Biometric authentication"
+echo "   - Coroutines and Flow for async operations"
+echo ""
+echo "2. API Integration:"
+echo "   - Backend runs on http://localhost:8000"
+echo "   - Android emulator should use http://10.0.2.2:8000"
+echo "   - Physical device should use your machine's IP"
+echo ""
+echo "3. Key Files to Create/Update:"
+echo "   - libs.versions.toml (dependencies)"
+echo "   - network_security_config.xml (HTTP in development)"
+echo "   - ApiConstants.kt (API endpoints)"
+echo ""
+echo "4. Backend Endpoints Your Android App Expects:"
+echo "   - POST /auth/register"
+echo "   - POST /auth/token (OAuth2)"
+echo "   - POST /auth/refresh"
+echo "   - GET /auth/profile"
+echo "   - PUT /users/{user_id}"
+echo "   - PATCH /users/{user_id}/bio"
+echo "   - GET /users/{user_id}/completion"
+echo ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SETUP COMPLETE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "🎉 COMPLETE WEALTHTRACKR SETUP GUIDE FINISHED!"
+echo ""
+echo "📱 ANDROID + 🐍 PYTHON FULL-STACK DEVELOPMENT ENVIRONMENT"
+echo ""
+echo "Next steps:"
+echo "1. Update .env file with your actual API keys and secrets"
+echo "2. Start backend: ./start_backend.sh"
+echo "3. Open Android Studio: android-studio"
+echo "4. Import your Android project"
+echo "5. Create Android Virtual Device (AVD) named 'WealthTrackr_AVD'"
+echo "6. Test API connection: ./check_environment.sh"
+echo "7. Run Android app: ./start_android.sh"
+echo ""
+echo "🔗 Integration Testing:"
+echo "   - Visit http://localhost:8000/docs for FastAPI documentation"
+echo "   - Test auth endpoints with curl or Postman"
+echo "   - Verify Android app can connect to backend API"
+echo ""
+echo "📚 Important File Locations:"
+echo "   - Backend: ~/Documents/WealthTrackr/backend/"
+echo "   - Android: ~/Documents/WealthTrackr/android/"
+echo "   - Scripts: ~/Documents/WealthTrackr/*.sh"
+echo "   - Logs: ~/Documents/WealthTrackr/logs/"
+echo ""
+echo "⚠️  SECURITY NOTES:"
+echo "   - Change default passwords in .env"
+echo "   - Update JWT_SECRET_KEY to a secure value"
+echo "   - Set proper CORS origins for production"
+echo "   - Enable HTTPS in production"
+echo ""
+echo "🐛 Troubleshooting:"
+echo "   - Backend issues: Check logs in ~/Documents/WealthTrackr/logs/"
+echo "   - Android issues: Check Android Studio logcat"
+echo "   - API connectivity: Ensure correct IP addresses in ApiConstants.kt"
+echo "   - Database issues: Check PostgreSQL service status"
+echo "   - Package issues: pip install --upgrade pip setuptools wheel"
+echo ""
+echo "🚀 Ready to develop your WealthTrackr app!"
+echo ""

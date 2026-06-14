@@ -1,0 +1,89 @@
+// __tests__/AddIncomeForm.test.tsx
+
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import AddIncomeForm from '../components/AddIncomeForm';
+import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
+
+jest.mock('axios');
+jest.mock('../contexts/AuthContext');
+
+// Mock Firebase user with getIdToken method
+const mockUser = {
+  getIdToken: jest.fn().mockResolvedValue('mock-token'),
+};
+
+describe('AddIncomeForm', () => {
+  beforeEach(() => {
+    (useAuth as jest.Mock).mockReturnValue({ currentUser: mockUser });
+  });
+
+  it('renders form and submits successfully', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({
+      data: { source: 'Freelance' },
+    });
+
+    render(<AddIncomeForm />);
+
+    fireEvent.change(screen.getByLabelText(/Income Source/i), {
+      target: { value: 'Freelance' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/Amount/i), {
+      target: { value: '1000' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/Date Received/i), {
+      target: { value: '2024-01-01' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /add income/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/added successfully/i)).toBeInTheDocument()
+    );
+  });
+
+  it('shows error if submission fails', async () => {
+    (axios.post as jest.Mock).mockRejectedValue({
+      response: { data: { detail: 'Server error' } },
+    });
+
+    render(<AddIncomeForm />);
+
+    fireEvent.change(screen.getByLabelText(/Income Source/i), {
+      target: { value: 'Bonus' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/Amount/i), {
+      target: { value: '500' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /add income/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/server error/i)).toBeInTheDocument()
+    );
+  });
+
+  it('shows login error if not authenticated', async () => {
+    (useAuth as jest.Mock).mockReturnValue({ currentUser: null });
+
+    render(<AddIncomeForm />);
+
+    fireEvent.change(screen.getByLabelText(/Income Source/i), {
+      target: { value: 'Other' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/Amount/i), {
+      target: { value: '100' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /add income/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/you must be logged in/i)).toBeInTheDocument()
+    );
+  });
+});

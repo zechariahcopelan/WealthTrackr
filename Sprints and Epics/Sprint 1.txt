@@ -1,0 +1,6 @@
+- [ ] User can input multiple sources of income (W2, freelance, passive, etc.)
+- [ ] Income data is saved persistently to a secure database
+- [ ] Expenses are categorized (food, rent, travel, subscriptions, etc.)
+- [ ] User sets expense amounts and dates (single or recurring)
+- [ ] Expense data is saved persistently to a secure database
+- [ ] User Authentication: Youll need the basics of user registration and login

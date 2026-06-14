@@ -1,0 +1,8 @@
+steps for wealthtrackr:
+
+1. create user stories
+2. create acceptance criteria
+3. create models.py files #clear blueprint for how your data will be          #structured and stored in the database.
+4. data modeling:  build the infrastructure or app logic that lets users interact with that data.
+5.Input user stores for sprint 1 backlog and input epic backlog
+6. Start coding User Stories

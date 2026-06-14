@@ -1,0 +1,140 @@
+// src/components/AddIncomeForm.tsx
+import React, { useState } from 'react';
+import axios from 'axios'; // For making API requests
+import { useAuth } from '../contexts/AuthContext'; // Assuming you have an AuthContext for Firebase
+
+interface IncomeFormData {
+  source: string;
+  amount: number;
+  date_received: string; // ISO 8601 string
+}
+
+const AddIncomeForm: React.FC = () => {
+  const { currentUser } = useAuth(); // Get authenticated user info (e.g., Firebase token)
+  const [formData, setFormData] = useState<IncomeFormData>({
+    source: '',
+    amount: 0,
+    date_received: new Date().toISOString().split('T')[0], // Default to today
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === 'amount' ? parseFloat(value) || 0 : value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+
+    if (!currentUser) {
+      setError("You must be logged in to add income.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Get Firebase ID token for backend authentication
+      const idToken = await currentUser.getIdToken();
+
+      const response = await axios.post(
+        '/api/income', // Your FastAPI backend URL, adjust if not relative
+        {
+          ...formData,
+          date_received: new Date(formData.date_received).toISOString(), // Ensure ISO format
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${idToken}`, // Send Firebase ID token
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      setSuccess(`Income "${response.data.source}" added successfully!`);
+      // Optionally, clear the form or reset state
+      setFormData({ source: '', amount: 0, date_received: new Date().toISOString().split('T')[0] });
+      // You might also want to trigger a data refresh on the dashboard here
+    } catch (err: any) {
+      console.error('Failed to add income:', err);
+      setError(err.response?.data?.detail || 'Failed to add income. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Add New Income</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="source" className="block text-sm font-medium text-gray-700">
+            Income Source
+          </label>
+          <select
+            id="source"
+            name="source"
+            value={formData.source}
+            onChange={handleChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          >
+            <option value="">Select a source</option>
+            <option value="W2 Salary">W2 Salary</option>
+            <option value="Freelance">Freelance</option>
+            <option value="Passive">Passive Income</option>
+            <option value="Bonus">Bonus</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
+            Amount ($)
+          </label>
+          <input
+            type="number"
+            id="amount"
+            name="amount"
+            value={formData.amount === 0 ? '' : formData.amount} // Avoid displaying 0 initially
+            onChange={handleChange}
+            min="0.01"
+            step="0.01"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="date_received" className="block text-sm font-medium text-gray-700">
+            Date Received
+          </label>
+          <input
+            type="date"
+            id="date_received"
+            name="date_received"
+            value={formData.date_received}
+            onChange={handleChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+        </div>
+        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {success && <p className="text-green-600 text-sm">{success}</p>}
+        <button
+          type="submit"
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? 'Adding...' : 'Add Income'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default AddIncomeForm;

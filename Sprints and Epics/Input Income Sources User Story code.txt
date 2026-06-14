@@ -1,0 +1,529 @@
+1. Database Model (already done, but reiterating for context)
+You've already defined your models.py (or equivalent). For income, it would look something like this (using a Python/PostgreSQL example):
+
+Python
+
+# models.py (Simplified representation)
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    # ... other user fields
+    incomes = relationship("Income", back_populates="owner")
+
+class Income(Base):
+    __tablename__ = "incomes"
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String, index=True) # e.g., "W2", "Freelance", "Passive"
+    amount = Column(Float)
+    date_received = Column(DateTime, default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id"))
+    owner = relationship("User", back_populates="incomes")
+    # You might add fields like 'is_recurring', 'frequency' for later sprints
+	
+	
+2. API Definition (GraphQL/REST API)
+We'll define a REST API endpoint for simplicity, as it's typically easier to get started with for basic CRUD operations.
+
+Endpoint: POST /api/income
+
+Purpose: Allows a logged-in user to add a new income source.
+
+Request Body (JSON):
+{
+  "source": "W2 Salary",
+  "amount": 3500.00,
+  "date_received": "2025-06-01T00:00:00Z" // ISO 8601 format
+}
+
+Successful Response (JSON, HTTP 201 Created):
+
+{
+  "id": 123,
+  "source": "W2 Salary",
+  "amount": 3500.00,
+  "date_received": "2025-06-01T00:00:00Z",
+  "user_id": 456
+}
+Error Response (JSON, HTTP 400 Bad Request, 401 Unauthorized, etc.):
+
+{
+  "detail": "Invalid input data"
+}
+
+
+3. Backend Implementation (FastAPI Example)
+Using FastAPI (Python) for the backend:
+
+# main.py (FastAPI application - simplified)
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer # For authentication later
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from datetime import datetime
+
+# Assuming you have database setup and models imported
+from .database import engine, SessionLocal, get_db
+from .models import Base, User, Income # Your models.py content
+from .auth import get_current_user # Placeholder for Firebase auth integration
+
+# Create database tables (run once, e.g., on startup or with alembic)
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+# Pydantic models for request/response validation
+class IncomeCreate(BaseModel):
+    source: str
+    amount: float
+    date_received: datetime
+
+class IncomeResponse(BaseModel):
+    id: int
+    source: str
+    amount: float
+    date_received: datetime
+    user_id: int
+
+    class Config: # Pydantic config for ORM mode
+        from_attributes = True
+
+# --- Income Endpoint ---
+@app.post("/api/income", response_model=IncomeResponse, status_code=status.HTTP_201_CREATED)
+async def create_income(
+    income: IncomeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Ensures user is authenticated
+):
+    """
+    Allows a logged-in user to add a new income source.
+    """
+    db_income = Income(
+        source=income.source,
+        amount=income.amount,
+        date_received=income.date_received,
+        user_id=current_user.id
+    )
+    db.add(db_income)
+    db.commit()
+    db.refresh(db_income)
+    return db_income
+
+# Placeholder for get_db and get_current_user
+# database.py
+# from sqlalchemy import create_engine
+# from sqlalchemy.orm import sessionmaker
+#
+# SQLALCHEMY_DATABASE_URL = "postgresql://user:password@host/dbname"
+# engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+#
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
+
+# auth.py (Simplified - would integrate with Firebase JWT verification)
+# from fastapi.security import OAuth2PasswordBearer
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token") # Your Firebase token endpoint
+# async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+#     # In a real app, you'd decode Firebase JWT here to get user ID
+#     # For now, let's mock a user if token exists
+#     if token:
+#         # This is a very basic placeholder for testing purposes only!
+#         # In production, you'd verify the Firebase token against Firebase Admin SDK
+#         user = db.query(User).filter(User.username == "testuser").first() # Or find by UID from token
+#         if user:
+#             return user
+#     raise HTTPException(
+#         status_code=status.HTTP_401_UNAUTHORIZED,
+#         detail="Not authenticated",
+#         headers={"WWW-Authenticate": "Bearer"},
+#     )
+4. Frontend Implementation (React + TypeScript + Tailwind CSS)
+Create a component for adding income.
+
+TypeScript
+
+// src/components/AddIncomeForm.tsx
+import React, { useState } from 'react';
+import axios from 'axios'; // For making API requests
+import { useAuth } from '../contexts/AuthContext'; // Assuming you have an AuthContext for Firebase
+
+interface IncomeFormData {
+  source: string;
+  amount: number;
+  date_received: string; // ISO 8601 string
+}
+
+const AddIncomeForm: React.FC = () => {
+  const { currentUser } = useAuth(); // Get authenticated user info (e.g., Firebase token)
+  const [formData, setFormData] = useState<IncomeFormData>({
+    source: '',
+    amount: 0,
+    date_received: new Date().toISOString().split('T')[0], // Default to today
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === 'amount' ? parseFloat(value) || 0 : value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+
+    if (!currentUser) {
+      setError("You must be logged in to add income.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Get Firebase ID token for backend authentication
+      const idToken = await currentUser.getIdToken();
+
+      const response = await axios.post(
+        '/api/income', // Your FastAPI backend URL, adjust if not relative
+        {
+          ...formData,
+          date_received: new Date(formData.date_received).toISOString(), // Ensure ISO format
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${idToken}`, // Send Firebase ID token
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      setSuccess(`Income "${response.data.source}" added successfully!`);
+      // Optionally, clear the form or reset state
+      setFormData({ source: '', amount: 0, date_received: new Date().toISOString().split('T')[0] });
+      // You might also want to trigger a data refresh on the dashboard here
+    } catch (err: any) {
+      console.error('Failed to add income:', err);
+      setError(err.response?.data?.detail || 'Failed to add income. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Add New Income</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="source" className="block text-sm font-medium text-gray-700">
+            Income Source
+          </label>
+          <select
+            id="source"
+            name="source"
+            value={formData.source}
+            onChange={handleChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          >
+            <option value="">Select a source</option>
+            <option value="W2 Salary">W2 Salary</option>
+            <option value="Freelance">Freelance</option>
+            <option value="Passive">Passive Income</option>
+            <option value="Bonus">Bonus</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
+            Amount ($)
+          </label>
+          <input
+            type="number"
+            id="amount"
+            name="amount"
+            value={formData.amount === 0 ? '' : formData.amount} // Avoid displaying 0 initially
+            onChange={handleChange}
+            min="0.01"
+            step="0.01"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="date_received" className="block text-sm font-medium text-gray-700">
+            Date Received
+          </label>
+          <input
+            type="date"
+            id="date_received"
+            name="date_received"
+            value={formData.date_received}
+            onChange={handleChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+        </div>
+        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {success && <p className="text-green-600 text-sm">{success}</p>}
+        <button
+          type="submit"
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? 'Adding...' : 'Add Income'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default AddIncomeForm;
+Firebase Authentication Context (Simplified Example for useAuth)
+
+TypeScript
+
+// src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getAuth, User as FirebaseUser, onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth
+
+// Extend or replace with your actual Firebase User type if needed
+interface AuthContextType {
+  currentUser: FirebaseUser | null;
+  loadingAuth: boolean;
+  // You might add login/logout functions here
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const auth = getAuth(); // Initialize Firebase Auth
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setLoadingAuth(false);
+    });
+
+    return unsubscribe;
+  }, [auth]);
+
+  return (
+    <AuthContext.Provider value={{ currentUser, loadingAuth }}>
+      {!loadingAuth && children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// In your main App.tsx or index.tsx, wrap your app with AuthProvider:
+// import { AuthProvider } from './contexts/AuthContext';
+// <AuthProvider>
+//   <App />
+// </AuthProvider>
+
+
+5. Integration and Testing
+Backend Testing (PyTest):
+You'd write unit tests for your FastAPI endpoint to ensure it correctly handles income creation, validation, and authentication.
+
+Python
+
+# tests/test_income_api.py (Example)
+from fastapi.testclient import TestClient
+from main import app, get_db # Assuming main.py contains your FastAPI app
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models import Base, User, Income # Your models
+
+# Setup a test database (e.g., SQLite in-memory)
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Override get_db for testing
+def override_get_db():
+    Base.metadata.create_all(bind=engine) # Create tables for each test
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine) # Drop tables after each test
+
+app.dependency_overrides[get_db] = override_get_db
+
+client = TestClient(app)
+
+def test_create_income():
+    # First, register a test user (or mock authentication)
+    # For simplicity in this test, let's assume get_current_user
+    # is mocked to always return a valid user ID during this test.
+    # In a real test, you'd properly mock the Firebase auth verification.
+    # Or you'd have a fixture to create a user and get a valid token.
+
+    # Create a mock user in the test DB
+    db = TestingSessionLocal()
+    test_user = User(username="testuser", hashed_password="hashedpassword") # Password not actually used for this test
+    db.add(test_user)
+    db.commit()
+    db.refresh(test_user)
+    db.close()
+
+    # Assuming get_current_user is mocked to return test_user
+    # You'd typically use a Pytest fixture for this.
+    from auth import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: test_user
+
+    response = client.post(
+        "/api/income",
+        json={
+            "source": "W2 Salary",
+            "amount": 5000.00,
+            "date_received": "2025-05-15T00:00:00Z"
+        },
+        headers={"Authorization": "Bearer mocked-firebase-token"} # This token would be validated by get_current_user mock
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["source"] == "W2 Salary"
+    assert data["amount"] == 5000.00
+    assert data["user_id"] == test_user.id # Verify income is linked to the test user
+
+    # Clean up override (important for other tests)
+    del app.dependency_overrides[get_current_user]
+
+
+Frontend Testing (Jest):
+You'd write unit tests for your AddIncomeForm component to ensure it renders correctly, handles input changes, and calls the API as expected. You'd likely mock the axios calls to avoid actual network requests in unit tests.
+
+TypeScript
+
+// src/components/__tests__/AddIncomeForm.test.tsx
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import AddIncomeForm from '../AddIncomeForm';
+import axios from 'axios';
+import { useAuth } from '../../contexts/AuthContext'; // Mock this
+
+// Mock axios post request
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+// Mock the useAuth hook for a logged-in user
+jest.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    currentUser: {
+      getIdToken: jest.fn().mockResolvedValue('mock-firebase-id-token'),
+    },
+    loadingAuth: false,
+  }),
+}));
+
+describe('AddIncomeForm', () => {
+  beforeEach(() => {
+    mockedAxios.post.mockClear();
+    // Reset the date for consistent testing
+    jest.useFakeTimers().setSystemTime(new Date('2025-06-05T00:00:00Z'));
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  test('renders the form correctly', () => {
+    render(<AddIncomeForm />);
+    expect(screen.getByLabelText(/Income Source/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Amount/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Date Received/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add Income/i })).toBeInTheDocument();
+  });
+
+  test('allows entering income details and submitting', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        id: 1,
+        source: 'Freelance',
+        amount: 750,
+        date_received: '2025-06-01T00:00:00Z',
+        user_id: 123,
+      },
+    });
+
+    render(<AddIncomeForm />);
+
+    fireEvent.change(screen.getByLabelText(/Income Source/i), { target: { value: 'Freelance' } });
+    fireEvent.change(screen.getByLabelText(/Amount/i), { target: { value: '750' } });
+    fireEvent.change(screen.getByLabelText(/Date Received/i), { target: { value: '2025-06-01' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Income/i }));
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        '/api/income',
+        {
+          source: 'Freelance',
+          amount: 750,
+          date_received: '2025-06-01T00:00:00.000Z',
+        },
+        expect.objectContaining({
+          headers: {
+            Authorization: 'Bearer mock-firebase-id-token',
+            'Content-Type': 'application/json',
+          },
+        })
+      );
+    });
+
+    expect(screen.getByText(/Income "Freelance" added successfully!/i)).toBeInTheDocument();
+    // Check if form was cleared
+    expect(screen.getByLabelText(/Amount/i)).toHaveValue(null); // Empties for number inputs
+    expect(screen.getByLabelText(/Income Source/i)).toHaveValue('');
+  });
+
+  test('shows error message on API failure', async () => {
+    mockedAxios.post.mockRejectedValueOnce({
+      response: { data: { detail: 'Network error occurred' } },
+    });
+
+    render(<AddIncomeForm />);
+
+    fireEvent.change(screen.getByLabelText(/Income Source/i), { target: { value: 'W2 Salary' } });
+    fireEvent.change(screen.getByLabelText(/Amount/i), { target: { value: '1000' } });
+    fireEvent.change(screen.getByLabelText(/Date Received/i), { target: { value: '2025-06-05' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Income/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Network error occurred/i)).toBeInTheDocument();
+    });
+  });
+});

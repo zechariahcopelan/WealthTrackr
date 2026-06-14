@@ -1,0 +1,47 @@
+// src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getAuth, User as FirebaseUser, onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth
+
+// Extend or replace with your actual Firebase User type if needed
+interface AuthContextType {
+  currentUser: FirebaseUser | null;
+  loadingAuth: boolean;
+  // You might add login/logout functions here
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const auth = getAuth(); // Initialize Firebase Auth
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setLoadingAuth(false);
+    });
+
+    return unsubscribe;
+  }, [auth]);
+
+  return (
+    <AuthContext.Provider value={{ currentUser, loadingAuth }}>
+      {!loadingAuth && children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// In your main App.tsx or index.tsx, wrap your app with AuthProvider:
+// import { AuthProvider } from './contexts/AuthContext';
+// <AuthProvider>
+//   <App />
+// </AuthProvider>

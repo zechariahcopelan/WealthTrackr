@@ -1,0 +1,157 @@
+Got it! You want a code example implementing a user story where the user can input multiple income sources (W2, freelance, passive, etc.) using the tech stack and features you listed.
+
+Since this involves frontend (React/TypeScript) + backend (FastAPI Python) + database (PostgreSQL), I’ll give you a simple full-stack example focusing on:
+
+A React form to input multiple income sources.
+
+A FastAPI backend endpoint to save that data.
+
+A PostgreSQL table schema for storing incomes.
+
+1. Database schema (PostgreSQL)
+sql
+CREATE TABLE user_income (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NOT NULL, -- assuming users are identified by UUID
+    income_type VARCHAR(50) NOT NULL, -- e.g. W2, Freelance, Passive
+    amount NUMERIC(12, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+2. Backend: FastAPI model + endpoint
+# models.py
+from pydantic import BaseModel
+from enum import Enum
+from typing import List
+from uuid import UUID
+
+class IncomeType(str, Enum):
+    W2 = "W2"
+    Freelance = "Freelance"
+    Passive = "Passive"
+    Other = "Other"
+
+class IncomeEntry(BaseModel):
+    income_type: IncomeType
+    amount: float
+
+class IncomeInput(BaseModel):
+    user_id: UUID
+    incomes: List[IncomeEntry]
+
+# main.py
+from fastapi import FastAPI, HTTPException
+from models import IncomeInput
+from typing import List
+
+app = FastAPI()
+
+# Dummy DB session placeholder, replace with your ORM
+db = []
+
+@app.post("/user/incomes")
+async def add_incomes(income_input: IncomeInput):
+    # In real app, insert into DB here
+    for income in income_input.incomes:
+        db.append({
+            "user_id": income_input.user_id,
+            "income_type": income.income_type,
+            "amount": income.amount
+        })
+    return {"message": "Incomes saved successfully"}
+3. Frontend: React + TypeScript form to input multiple incomes
+tsx
+// IncomeForm.tsx
+import React, { useState } from "react";
+
+type IncomeType = "W2" | "Freelance" | "Passive" | "Other";
+
+interface IncomeEntry {
+  income_type: IncomeType;
+  amount: number;
+}
+
+export default function IncomeForm() {
+  const [incomes, setIncomes] = useState<IncomeEntry[]>([
+    { income_type: "W2", amount: 0 },
+  ]);
+
+  const handleIncomeChange = (index: number, field: keyof IncomeEntry, value: any) => {
+    const newIncomes = [...incomes];
+    newIncomes[index][field] = field === "amount" ? Number(value) : value;
+    setIncomes(newIncomes);
+  };
+
+  const addIncome = () => {
+    setIncomes([...incomes, { income_type: "W2", amount: 0 }]);
+  };
+
+  const handleSubmit = async () => {
+    // Example user id
+    const userId = "123e4567-e89b-12d3-a456-426614174000"; 
+
+    const response = await fetch("/user/incomes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, incomes }),
+    });
+
+    if (response.ok) {
+      alert("Incomes saved!");
+    } else {
+      alert("Failed to save incomes.");
+    }
+  };
+
+  return (
+    <div className="p-4 max-w-md mx-auto">
+      <h2 className="text-xl font-bold mb-4">Add Income Sources</h2>
+      {incomes.map((income, i) => (
+        <div key={i} className="flex gap-2 mb-2">
+          <select
+            value={income.income_type}
+            onChange={(e) => handleIncomeChange(i, "income_type", e.target.value)}
+            className="border rounded px-2"
+          >
+            <option value="W2">W2</option>
+            <option value="Freelance">Freelance</option>
+            <option value="Passive">Passive</option>
+            <option value="Other">Other</option>
+          </select>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={income.amount}
+            onChange={(e) => handleIncomeChange(i, "amount", e.target.value)}
+            placeholder="Amount"
+            className="border rounded px-2 flex-grow"
+          />
+        </div>
+      ))}
+      <button
+        onClick={addIncome}
+        className="bg-blue-500 text-white px-3 py-1 rounded mb-4"
+      >
+        + Add Another Income
+      </button>
+      <button
+        onClick={handleSubmit}
+        className="bg-green-600 text-white px-4 py-2 rounded"
+      >
+        Save Incomes
+      </button>
+    </div>
+  );
+}
+4. How this fits your stack and goals:
+React + TypeScript + Tailwind: Form UI with input validation
+
+FastAPI (Python) backend to receive and save income entries
+
+PostgreSQL table schema for persistent storage
+
+You can add authentication with Firebase and protect /user/incomes endpoint accordingly.
+
+Later, use your GraphQL or REST API layer to fetch/update incomes.
+
+Deploy with Docker, set up CI/CD, and add testing with Jest/PyTest as your project grows.
